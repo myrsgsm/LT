@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Royal DateSlot</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4a0000">
+    <link rel="apple-touch-icon" href="icon-192.png">
+
+    <style>
+        :root { 
+            --maroon-dark: #2d0000;
+            --maroon: #800000; 
+            --gold: #D4AF37; 
+            --gold-light: #f9eeb8;
+            --cream: #f4f1ea;
+            --white: #FFFFFF; 
+            --dark: #121212;
+            
+            /* Heatmap Colors */
+            --safe: #e8f5e9; --safe-border: #a5d6a7; --safe-txt: #1b5e20;
+            --busy: #fff3e0; --busy-border: #ffcc80; --busy-txt: #e65100;
+            --danger: #ffebee; --danger-border: #ef9a9a; --danger-txt: #b71c1c;
+            --past: #eeeeee; --past-txt: #bdbdbd;
+        }
+
+        * { box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background-color: var(--cream); margin: 0; padding: 0; color: var(--dark); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+        /* --- PREMIUM DOUBLE HEADER --- */
+        .main-header {
+            background: linear-gradient(180deg, var(--maroon-dark), var(--maroon));
+            color: white; padding: 12px 15px; 
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3); z-index: 100;
+        }
+        .brand-title { font-weight: 900; font-size: 18px; letter-spacing: 1px; color: var(--gold); text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        
+        .header-right { display: flex; align-items: center; gap: 10px; }
+        .status-pill { 
+            display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 800; 
+            background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 20px; 
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ff4444; border: 1px solid white; transition: 0.3s; }
+        .status-dot.online { background: #00ff00; box-shadow: 0 0 6px #00ff00; }
+
+        .btn-logout { background: none; border: none; color: white; font-size: 20px; cursor: pointer; opacity: 0.8; }
+
+        /* --- SUB HEADER (Nav) --- */
+        .sub-header {
+            background: var(--maroon);
+            padding: 10px 15px; display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1); position: relative; z-index: 90;
+            border-bottom: 2px solid var(--gold);
+        }
+        .slot-title { font-size: 14px; font-weight: 900; color: white; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9; }
+        
+        .nav-controls { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.1); padding: 4px 10px; border-radius: 20px; }
+        .nav-btn { background: none; border: none; color: var(--gold); font-size: 18px; cursor: pointer; font-weight: bold; }
+        .current-month { font-weight: 800; font-size: 14px; color: white; min-width: 90px; text-align: center; }
+
+        /* --- CALENDAR GRID --- */
+        .calendar-wrapper { flex: 1; overflow-y: auto; padding: 15px; padding-bottom: 100px; background: linear-gradient(to bottom, #f4f1ea, #e0dcd0); }
+        
+        .weekdays { 
+            display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; 
+            font-weight: 900; color: var(--maroon); margin-bottom: 10px; font-size: 12px;
+            background: white; padding: 10px 0; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        /* Weekend Color */
+        .weekdays div:nth-child(6), .weekdays div:nth-child(7) { color: #c62828; }
+
+        .days-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+
+        .day-box { 
+            background: white; aspect-ratio: 0.85; border-radius: 10px; 
+            display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.05); cursor: pointer; position: relative;
+            border: 1px solid transparent; transition: transform 0.1s; padding: 5px 2px;
+        }
+        .day-box:active { transform: scale(0.95); }
+
+        .d-num { font-size: 16px; font-weight: 800; color: #444; }
+        .d-count { font-size: 11px; font-weight: 900; padding: 2px 6px; border-radius: 6px; width: 100%; text-align: center; }
+
+        /* TINT LOGIC */
+        .day-past { background: var(--past); border: 1px solid #ddd; opacity: 0.7; }
+        .day-past .d-num { color: #999; }
+        
+        .level-0 { background: white; border: 1px solid #e0e0e0; }
+        .level-safe { background: var(--safe); border: 1px solid var(--safe-border); }
+        .level-safe .d-count { color: var(--safe-txt); background: rgba(255,255,255,0.7); }
+
+        .level-busy { background: var(--busy); border: 1px solid var(--busy-border); }
+        .level-busy .d-count { color: var(--busy-txt); background: rgba(255,255,255,0.7); }
+
+        .level-danger { background: var(--danger); border: 1px solid var(--danger-border); }
+        .level-danger .d-count { color: var(--danger-txt); background: rgba(255,255,255,0.7); }
+
+        /* WEEKEND RING (Sat/Sun) */
+        .is-weekend { 
+            border: 2px solid var(--gold) !important; 
+            box-shadow: 0 0 8px rgba(212, 175, 55, 0.3);
+        }
+
+        /* OVERDUE FLOATING BUTTON */
+        .fab-overdue {
+            position: fixed; bottom: 25px; left: 50%; transform: translateX(-50%);
+            background: linear-gradient(135deg, #1a1a1a, #000); color: white; 
+            padding: 14px 30px; border-radius: 40px; 
+            font-weight: 900; font-size: 14px; letter-spacing: 0.5px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.2);
+            display: flex; align-items: center; gap: 10px; cursor: pointer; z-index: 500;
+            transition: transform 0.2s;
+        }
+        .fab-overdue:active { transform: translateX(-50%) scale(0.95); }
+        .badge-red { background: red; color: white; padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; box-shadow: 0 2px 5px rgba(255,0,0,0.4); }
+
+        /* MODALS (Heavy Styling) */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(5px); z-index: 2000; align-items: end; justify-content: center; }
+        .modal-content { 
+            background: white; width: 100%; max-width: 500px; height: 85vh; 
+            border-radius: 25px 25px 0 0; padding: 25px; 
+            display: flex; flex-direction: column; animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); 
+            box-shadow: 0 -10px 40px rgba(0,0,0,0.3);
+        }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #eee; padding-bottom: 15px; }
+        .m-title { font-size: 22px; font-weight: 900; color: var(--maroon); letter-spacing: -0.5px; }
+        .m-close { background: #eee; border: none; width: 35px; height: 35px; border-radius: 50%; font-weight: bold; cursor: pointer; font-size: 16px; color: #555; }
+
+        .list-container { flex: 1; overflow-y: auto; padding-bottom: 20px; }
+        
+        /* PREMIUM BILL CARD */
+        .bill-card { 
+            background: white; border: 1px solid rgba(0,0,0,0.05); padding: 18px; 
+            border-radius: 16px; margin-bottom: 12px; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            display: flex; justify-content: space-between; align-items: center;
+            transition: transform 0.1s; position: relative; overflow: hidden;
+        }
+        .bill-card:active { transform: scale(0.98); background: #fdfdfd; }
+        .bill-card::before { content:''; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--gold); }
+
+        .bc-left h4 { margin: 0; font-size: 24px; font-weight: 900; color: var(--maroon); line-height: 1; letter-spacing: -0.5px; }
+        .bc-left p { margin: 5px 0 0; font-size: 13px; color: #555; font-weight: 700; text-transform: uppercase; }
+        .bc-right { text-align: right; }
+        .st-badge { font-size: 11px; padding: 4px 10px; border-radius: 6px; font-weight: 900; background: #eee; letter-spacing: 0.5px; }
+        
+        /* LOGIN */
+        #login-view { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--dark); z-index: 5000; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; }
+        .login-card { background: white; padding: 35px; border-radius: 20px; width: 100%; max-width: 350px; text-align: center; border-top: 8px solid var(--maroon); box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+        .inp { width: 100%; padding: 16px; margin: 12px 0; border: 2px solid #eee; border-radius: 12px; font-size: 18px; outline: none; background: #f9f9f9; font-weight: 600; text-align: center; }
+        .inp:focus { border-color: var(--maroon); background: white; }
+        .btn-main { background: linear-gradient(135deg, var(--maroon), #5a0000); color: var(--gold); border: none; width: 100%; padding: 16px; border-radius: 12px; font-weight: 900; font-size: 16px; cursor: pointer; margin-top: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
+
+        #install-btn { display: none; width: 100%; padding: 14px; background: #007bff; color: white; border: none; border-radius: 12px; margin-bottom: 20px; font-weight: 800; box-shadow: 0 5px 15px rgba(0,123,255,0.3); }
+        #settings-btn { position: fixed; top: 20px; right: 20px; color: white; background: rgba(255,255,255,0.1); padding: 10px; border-radius: 50%; cursor: pointer; }
+        #settings-modal { display: none; z-index: 6000; align-items: center; }
+        .set-box { background: white; padding: 25px; width: 90%; max-width: 350px; border-radius: 15px; }
+
+    </style>
+</head>
+<body>
+
+    <div id="login-view">
+        <div id="settings-btn" onclick="openSettings()">⚙️</div>
+        <div class="login-card">
+            <h2 style="color:var(--maroon); margin-bottom: 5px; font-weight: 900;">ROYAL TERMINAL</h2>
+            <p style="color:grey; font-weight:bold; font-size:12px; margin-bottom:20px;">DATESLOT MANAGER</p>
+            <button id="install-btn" onclick="installPWA()">📲 INSTALL APP</button>
+            <input type="email" id="login-email" class="inp" placeholder="Email">
+            <input type="password" id="login-pass" class="inp" placeholder="Password">
+            <button class="btn-main" onclick="handleLogin()">SECURE LOGIN ➜</button>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="modal" style="align-items:center;">
+        <div class="set-box">
+            <h3 style="color:var(--maroon); margin-top:0;">DATABASE CONFIG</h3>
+            <input type="text" id="conf-url" class="inp" placeholder="URL">
+            <input type="text" id="conf-key" class="inp" placeholder="Key">
+            <button class="btn-main" onclick="saveConfig()">SAVE & REBOOT</button>
+            <button class="btn-main" style="background:#eee; color:#333; box-shadow:none; margin-top:10px;" onclick="document.getElementById('settings-modal').style.display='none'">CANCEL</button>
+        </div>
+    </div>
+
+    <div id="app-shell" style="display:none; flex-direction:column; height:100%;">
+        <div class="main-header">
+            <div class="brand-title">ROYAL SHERWANI</div>
+            <div class="header-right">
+                <div class="status-pill">
+                    <div id="status-dot" class="status-dot"></div>
+                    <span id="status-txt">OFFLINE</span>
+                </div>
+                <button class="btn-logout" onclick="logout()"><i class="ri-logout-circle-r-line"></i></button>
+            </div>
+        </div>
+
+        <div class="sub-header">
+            <div class="slot-title">DATE SLOT</div>
+            <div class="nav-controls">
+                <button class="nav-btn" onclick="changeMonth(-1)">❮</button>
+                <div class="current-month" id="month-display">Jan 2026</div>
+                <button class="nav-btn" onclick="changeMonth(1)">❯</button>
+            </div>
+        </div>
+
+        <div class="calendar-wrapper">
+            <div class="weekdays">
+                <div>MON</div><div>TUE</div><div>WED</div><div>THU</div><div>FRI</div><div>SAT</div><div>SUN</div>
+            </div>
+            <div class="days-grid" id="days-grid"></div>
+        </div>
+
+        <div class="fab-overdue" onclick="showOverdue()">
+            <span>⚠️ OVERDUE</span>
+            <span class="badge-red" id="overdue-count">0</span>
+        </div>
+    </div>
+
+    <div id="details-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="m-title" id="modal-title">Details</div>
+                <button class="m-close" onclick="closeModal()">✕</button>
+            </div>
+            <div class="list-container" id="modal-list"></div>
+        </div>
+    </div>
+
+    <script>
+        let supabaseClient;
+        let activeBills = [];
+        let currentDate = new Date();
+        let deferredPrompt;
+
+        // --- PWA ---
+        if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+        window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt=e; document.getElementById('install-btn').style.display='block'; });
+        async function installPWA() { if(deferredPrompt){ deferredPrompt.prompt(); deferredPrompt=null; } }
+
+        // --- INIT & NETWORK ---
+        window.onload = function() {
+            const u = localStorage.getItem('rs-url');
+            const k = localStorage.getItem('rs-key');
+            if(u && k) { supabaseClient = supabase.createClient(u, k); checkSession(); }
+            updateNetworkStatus();
+        };
+
+        window.addEventListener('online', updateNetworkStatus);
+        window.addEventListener('offline', updateNetworkStatus);
+
+        function updateNetworkStatus() {
+            const dot = document.getElementById('status-dot');
+            const txt = document.getElementById('status-txt');
+            if (navigator.onLine) {
+                dot.classList.add('online'); txt.innerText = 'ONLINE';
+            } else {
+                dot.classList.remove('online'); txt.innerText = 'OFFLINE';
+            }
+        }
+
+        // --- AUTH ---
+        function openSettings() { if(prompt("Code:")==='5563990') document.getElementById('settings-modal').style.display='flex'; }
+        function saveConfig() { localStorage.setItem('rs-url', document.getElementById('conf-url').value); localStorage.setItem('rs-key', document.getElementById('conf-key').value); location.reload(); }
+        
+        async function handleLogin() { 
+            const e=document.getElementById('login-email').value, p=document.getElementById('login-pass').value; 
+            const {error}=await supabaseClient.auth.signInWithPassword({email:e, password:p}); 
+            if(!error) checkSession(); else alert(error.message); 
+        }
+        
+        async function checkSession() { 
+            const {data}=await supabaseClient.auth.getSession(); 
+            if(data.session){ 
+                document.getElementById('login-view').style.display='none'; 
+                document.getElementById('app-shell').style.display='flex';
+                fetchData(); 
+            } 
+        }
+        async function logout() { await supabaseClient.auth.signOut(); location.reload(); }
+
+        // --- DATA ---
+        async function fetchData() {
+            const { data, error } = await supabaseClient
+                .from('bills')
+                .select('bill_number, customer_name, customer_mobile, delivery_date, status')
+                .not('status', 'in', '("DELIVERED","CANCELLED")');
+
+            if(error) { alert("Error loading data"); return; }
+            activeBills = data;
+            renderCalendar();
+            updateOverdueCount();
+        }
+
+        function updateOverdueCount() {
+            const today = new Date().toISOString().split('T')[0];
+            const count = activeBills.filter(b => b.delivery_date < today).length;
+            document.getElementById('overdue-count').innerText = count;
+        }
+
+        // --- CALENDAR LOGIC (Monday Start) ---
+        function renderCalendar() {
+            const grid = document.getElementById('days-grid');
+            grid.innerHTML = '';
+            
+            const y = currentDate.getFullYear();
+            const m = currentDate.getMonth();
+            
+            document.getElementById('month-display').innerText = new Date(y, m).toLocaleString('default', { month: 'short', year: 'numeric' });
+
+            // Standard Day: 0 (Sun) to 6 (Sat). 
+            // We want Mon(1)->0, Tue(2)->1 ... Sun(0)->6
+            let firstDay = (new Date(y, m, 1).getDay() + 6) % 7; 
+            const daysInMonth = new Date(y, m + 1, 0).getDate();
+            const todayStr = new Date().toISOString().split('T')[0];
+
+            // Empty slots
+            for(let i=0; i<firstDay; i++) {
+                const empty = document.createElement('div');
+                grid.appendChild(empty);
+            }
+
+            // Days
+            for(let d=1; d<=daysInMonth; d++) {
+                const dateStr = `${y}-${String(m+1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                
+                // Calculate position in the week (0=Mon... 5=Sat, 6=Sun) for border logic
+                const dayIndex = (firstDay + d - 1) % 7;
+                const isWeekend = (dayIndex >= 5); // Sat(5) or Sun(6)
+
+                const dayBills = activeBills.filter(b => b.delivery_date === dateStr);
+                const count = dayBills.length;
+
+                const box = document.createElement('div');
+                box.className = 'day-box';
+                box.onclick = () => openDayDetails(dateStr, dayBills);
+
+                if (dateStr < todayStr) {
+                    box.classList.add('day-past');
+                } else {
+                    if(count === 0) box.classList.add('level-0');
+                    else if(count <= 6) box.classList.add('level-safe');
+                    else if(count <= 12) box.classList.add('level-busy');
+                    else box.classList.add('level-danger');
+                }
+
+                if(isWeekend) box.classList.add('is-weekend');
+
+                box.innerHTML = `
+                    <div class="d-num">${d}</div>
+                    ${count > 0 ? `<div class="d-count">${count}</div>` : ''}
+                `;
+                grid.appendChild(box);
+            }
+        }
+
+        function changeMonth(dir) {
+            currentDate.setMonth(currentDate.getMonth() + dir);
+            renderCalendar();
+        }
+
+        // --- MODALS ---
+        function openDayDetails(dateStr, bills) {
+            const d = new Date(dateStr).toDateString();
+            document.getElementById('modal-title').innerText = d + ` (${bills.length})`;
+            renderList(bills);
+            document.getElementById('details-modal').style.display = 'flex';
+        }
+
+        function showOverdue() {
+            const today = new Date().toISOString().split('T')[0];
+            const overdue = activeBills.filter(b => b.delivery_date < today);
+            document.getElementById('modal-title').innerText = `⚠️ OVERDUE (${overdue.length})`;
+            renderList(overdue);
+            document.getElementById('details-modal').style.display = 'flex';
+        }
+
+        function renderList(list) {
+            const container = document.getElementById('modal-list');
+            container.innerHTML = '';
+            
+            if(list.length === 0) {
+                container.innerHTML = '<div style="text-align:center; padding:30px; color:grey; font-weight:bold;">No Deliveries</div>';
+                return;
+            }
+
+            list.forEach(b => {
+                let stColor = '#333';
+                if(b.status === 'READY') stColor = 'green';
+                if(b.status === 'PENDING') stColor = 'red';
+                if(b.status === 'WORK') stColor = 'orange';
+
+                // BIG BILL NUMBER LOGIC
+                container.innerHTML += `
+                <div class="bill-card" onclick="alert('Open BillBook to Manage')">
+                    <div class="bc-left">
+                        <h4>#${b.bill_number}</h4>
+                        <p>${b.customer_name} <br> ${b.customer_mobile || ''}</p>
+                    </div>
+                    <div class="bc-right">
+                        <div class="st-badge" style="color:${stColor}">${b.status}</div>
+                    </div>
+                </div>`;
+            });
+        }
+
+        function closeModal() { document.getElementById('details-modal').style.display = 'none'; }
+
+    </script>
+</body>
+</html>
